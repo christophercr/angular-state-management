@@ -1,0 +1,14 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.indicators {
+  .genre {
+    display: inline-block;
+    border: #3f51b5 solid 1px;
+    text-align: center;
+    padding: 10px;
+  }
+}

@@ -1,0 +1,11 @@
+<h3>What's in my collections?</h3>
+
+<div class="indicators">
+  <span *ngFor="let genre of genres" class="genre">
+    {{ genre }}
+    <br>
+    {{ genreCounters.get(genre) }}
+  </span>
+</div>
+
+<button type="button" (click)="updateGenreCounters()">Update counters</button>
