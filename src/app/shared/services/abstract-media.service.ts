@@ -3,6 +3,8 @@ import * as localForage from 'localforage';
 import {Media} from '../entities/abstract-media.entity';
 import {classToPlain, plainToClassFromExist} from 'class-transformer';
 import {MediaCollection} from '../entities/media-collection.entity';
+import {from, Observable, throwError} from "rxjs";
+import {catchError, map, tap} from "rxjs/operators";
 
 export abstract class MediaService<T extends Media> {
 
@@ -21,79 +23,75 @@ export abstract class MediaService<T extends Media> {
     });
   }
 
-  loadMediaCollection(identifier: string): Promise<MediaCollection<T>> {
+  loadMediaCollection(identifier: string): Observable<MediaCollection<T>> {
     console.log(`Trying to load media collection with the following identifier: ${identifier}`);
-    return new Promise<MediaCollection<T>>((resolve, reject) => {
-      this._store.getItem(identifier)
-        .then(value => {
-          console.log('Found the collection: ', value);
+    return from(this._store.getItem(identifier)).pipe(
+      map(value => {
+        console.log('Found the collection: ', value);
 
-          const retrievedCollection = plainToClassFromExist<MediaCollection<T>, unknown>(new MediaCollection<T>(this._type), value);
+        const retrievedCollection = plainToClassFromExist<MediaCollection<T>, unknown>(new MediaCollection<T>(this._type), value);
 
-          console.log('Retrieved collection: ', retrievedCollection);
-          resolve(retrievedCollection);
-        })
-        .catch(err => {
-          reject(err); // let the error through
-        });
-    });
-  }
+        console.log('Retrieved collection: ', retrievedCollection);
 
-  saveMediaCollection(collection: Readonly<MediaCollection<T>>): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      if (!collection) {
-        reject(new Error('The list cannot be null or undefined!'));
-      }
-
-      console.log(`Saving media collection with the following name ${collection.name}`);
-
-      const serializedVersion = classToPlain(collection, {excludePrefixes: ['_']});
-      console.log('Serialized version: ', serializedVersion);
-
-      this._store.setItem(collection.identifier, serializedVersion)
-        .then(value => {
-          console.log(`Saved the ${collection.name} collection successfully! Saved value: `, value);
-          resolve();
-        })
-        .catch(err => {
-          console.error(`Failed to save the ${collection.name} collection with identifier ${collection.identifier}. Error: ${err}`);
-          reject(err);
-        });
-    });
-  }
-
-  getMediaCollectionIdentifiersList(): Promise<string[]> {
-    return new Promise<string[]>((resolve, reject) => {
-      console.log('Retrieving the list of media collection identifiers');
-      this._store.keys().then(keys => {
-        console.log('Retrieved the of media collection identifiers: ', keys);
-        resolve(keys);
+        return retrievedCollection;
+      }),
+      catchError(err => {
+        return throwError(err); // let the error through
       })
-        .catch(err => {
-          console.error('Failed to retrieve the list of media collection identifiers. Error: ', err);
-          reject(err);
-        });
-    });
+    );
   }
 
-  removeMediaCollection(identifier: string): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      if (!identifier || '' === identifier.trim()) {
-        reject(new Error('The identifier must be provided!'));
-      }
+  saveMediaCollection(collection: Readonly<MediaCollection<T>>): Observable<void> {
+    if (!collection) {
+      return throwError(new Error('The list cannot be null or undefined!'));
+    }
 
-      console.log(`Removing media collection with the following identifier ${identifier}`);
+    console.log(`Saving media collection with the following name ${collection.name}`);
 
-      this._store.removeItem(identifier)
-        .then(() => {
-          console.log(`Removed the ${identifier} collection successfully!`);
-          resolve();
-        })
-        .catch(err => {
-          console.error(`Failed to removed the ${identifier} collection`);
-          reject(err);
-        });
-    });
+    const serializedVersion = classToPlain(collection, {excludePrefixes: ['_']});
+    console.log('Serialized version: ', serializedVersion);
+
+    return from(this._store.setItem(collection.identifier, serializedVersion)).pipe(
+      map(value => {
+        console.log(`Saved the ${collection.name} collection successfully! Saved value: `, value);
+        return;
+      }),
+      catchError(err => {
+        console.error(`Failed to save the ${collection.name} collection with identifier ${collection.identifier}. Error: ${err}`);
+        return throwError(err);
+      })
+    );
+  }
+
+  getMediaCollectionIdentifiersList(): Observable<string[]> {
+    console.log('Retrieving the list of media collection identifiers');
+    return from(this._store.keys()).pipe(
+      tap(keys => {
+        console.log('Retrieved the of media collection identifiers: ', keys);
+      }),
+      catchError(err => {
+        console.error('Failed to retrieve the list of media collection identifiers. Error: ', err);
+        return throwError(err);
+      })
+    );
+  }
+
+  removeMediaCollection(identifier: string): Observable<void> {
+    if (!identifier || '' === identifier.trim()) {
+      return throwError(new Error('The identifier must be provided!'));
+    }
+
+    console.log(`Removing media collection with the following identifier ${identifier}`);
+
+    return from(this._store.removeItem(identifier)).pipe(
+      tap(() => {
+        console.log(`Removed the ${identifier} collection successfully!`);
+      }),
+      catchError(err => {
+        console.error(`Failed to removed the ${identifier} collection`);
+        return throwError(err);
+      })
+    );
   }
 
   displayErrorMessage(errorMessage: string): void {
