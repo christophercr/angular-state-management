@@ -38,6 +38,7 @@
     "@angular/router": "~10.0.14",
     "@datorama/akita": "^5.2.3",
     "@datorama/akita-cli": "^6.1.1",
+    "@datorama/akita-ngdevtools": "^5.0.3",
     "class-transformer": "^0.3.1",
     "core-js": "^3.6.5",
     "localforage": "^1.9.0",
