@@ -1,9 +1,10 @@
 import {Injectable} from '@angular/core';
+import {forkJoin, Observable} from "rxjs";
+import {map, switchMap, tap} from "rxjs/operators";
 import {MediaService} from '../../shared/services/abstract-media.service';
 import {Book} from '../entities/book.entity';
 import {MediaCollection} from '../../shared/entities/media-collection.entity';
-import {forkJoin} from "rxjs";
-import {switchMap, tap} from "rxjs/operators";
+import {BookCollectionsQuery, BookCollectionsService} from "../state";
 
 @Injectable({
   providedIn: 'root'
@@ -11,8 +12,30 @@ import {switchMap, tap} from "rxjs/operators";
 export class BookService extends MediaService<Book> {
   private _bookCollections: Map<string, MediaCollection<Book>> = new Map<string, MediaCollection<Book>>();
 
-  constructor() {
+  constructor(private bookCollectionsService: BookCollectionsService, private bookCollectionsQuery: BookCollectionsQuery) {
     super(Book)
+
+    this.bookCollectionsQuery.bookCollections$.subscribe((bookCollections) => {
+      this._bookCollections = this.createBookCollectionsMap(bookCollections);
+    });
+  }
+
+  get bookCollections$(): Observable<Map<string, MediaCollection<Book>>> {
+    return this.bookCollectionsQuery.bookCollections$.pipe(
+      map((bookCollections) => {
+        return this.createBookCollectionsMap(bookCollections);
+      })
+    );
+  }
+
+  private createBookCollectionsMap(collections: MediaCollection<Book>[]): Map<string, MediaCollection<Book>> {
+    const bookCollectionsMap = new Map<string, MediaCollection<Book>>();
+
+    for (const collection of collections) {
+      bookCollectionsMap.set(collection.identifier, collection);
+    }
+
+    return bookCollectionsMap;
   }
 
   get bookCollections(): Map<string, MediaCollection<Book>> {
@@ -22,12 +45,12 @@ export class BookService extends MediaService<Book> {
   reloadBookCollections(): void {
     this.getMediaCollectionIdentifiersList().pipe(
       switchMap(keys => {
-        this._bookCollections.clear(); // clear the current state
+        this.bookCollectionsService.loadBookCollection();
 
         const loadMediaCollections$ = keys.map(key => {
           return this.loadMediaCollection(key).pipe(
             tap((collection) => {
-              this._bookCollections.set(key, collection);
+              this.bookCollectionsService.loadBookCollectionSuccess(collection);
             })
           );
         })
@@ -41,7 +64,6 @@ export class BookService extends MediaService<Book> {
     console.log('Creating a new book collection: ', name);
 
     const newBookCollection: MediaCollection<Book> = new MediaCollection<Book>(Book, name);
-    this._bookCollections.set(newBookCollection.identifier, newBookCollection);
 
     this.saveMediaCollection(newBookCollection).subscribe({
       next: () => {
@@ -82,10 +104,12 @@ export class BookService extends MediaService<Book> {
 
     const existingCollection = this._bookCollections.get(collectionIdentifier);
     if (!existingCollection || !book) {
-      throw new Error("The collection couldn't be retrieved or we could not get the book details from the view!");
+      const errorMsg = "The collection couldn't be retrieved or we could not get the book details from the view!"
+      this.bookCollectionsService.createBookFailure({error: errorMsg});
+      throw new Error(errorMsg);
     }
 
-    existingCollection.addMedia(book);
+    this.bookCollectionsService.createBook(book, collectionIdentifier);
 
     this.saveMediaCollection(existingCollection)
       .subscribe({
