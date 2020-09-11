@@ -1,6 +1,8 @@
 import {BrowserModule} from '@angular/platform-browser';
 import {NgModule} from '@angular/core';
 import {NgxsModule} from "@ngxs/store";
+import {NgxsReduxDevtoolsPluginModule} from "@ngxs/devtools-plugin";
+import {NgxsLoggerPluginModule} from "@ngxs/logger-plugin";
 
 import {AppComponent} from './app.component';
 import {BookModule} from './book/book.module';
@@ -20,6 +22,8 @@ import {environment} from "../environments/environment";
     NgxsModule.forRoot([], {
       developmentMode: !environment.production
     }),
+    NgxsLoggerPluginModule.forRoot(),
+    NgxsReduxDevtoolsPluginModule.forRoot()
   ],
   providers: [],
   bootstrap: [AppComponent]

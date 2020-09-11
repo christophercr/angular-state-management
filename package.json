@@ -37,6 +37,8 @@
     "@angular/platform-browser-dynamic": "~10.0.14",
     "@angular/router": "~10.0.14",
     "@ngxs/cli": "^2.0.0",
+    "@ngxs/devtools-plugin": "^3.7.0",
+    "@ngxs/logger-plugin": "^3.7.0",
     "@ngxs/store": "^3.7.0",
     "class-transformer": "^0.3.1",
     "core-js": "^3.6.5",
