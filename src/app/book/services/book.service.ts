@@ -1,9 +1,17 @@
 import {Injectable} from '@angular/core';
+import {Select, Store} from "@ngxs/store";
+import {forkJoin, Observable} from "rxjs";
+import {map, switchMap, tap} from "rxjs/operators";
 import {MediaService} from '../../shared/services/abstract-media.service';
 import {Book} from '../entities/book.entity';
 import {MediaCollection} from '../../shared/entities/media-collection.entity';
-import {forkJoin} from "rxjs";
-import {switchMap, tap} from "rxjs/operators";
+import {
+  CreateBookAction,
+  CreateBookFailureAction,
+  LoadBookCollectionAction,
+  LoadBookCollectionSuccessAction
+} from "../state/book-collections.actions";
+import {BookCollectionsState, BookCollectionsStateModel} from "../state/book-collections.state";
 
 @Injectable({
   providedIn: 'root'
@@ -11,8 +19,58 @@ import {switchMap, tap} from "rxjs/operators";
 export class BookService extends MediaService<Book> {
   private _bookCollections: Map<string, MediaCollection<Book>> = new Map<string, MediaCollection<Book>>();
 
-  constructor() {
+  // Reads the name of the state from the state class
+  @Select(BookCollectionsState) collections$: Observable<BookCollectionsStateModel>;
+
+  // Also accepts a function like our select method
+  @Select(state => state['bookCollections']) selectWithFunction$: Observable<BookCollectionsStateModel>;
+
+  // // Reads the name of the state from the parameter
+  // @Select() bookCollections$: Observable<BookCollectionsStateModel>;
+
+  // Uses the 'collections' memoized selector to return the collections
+  @Select(BookCollectionsState.collections) selectWithSelector$: Observable<MediaCollection<Book>[]>;
+
+  constructor(private _store: Store) {
     super(Book)
+
+    this.collections$.subscribe((collections) => {
+      console.log('---- SELECT bookCollections', collections);
+    });
+
+    this.selectWithFunction$.subscribe((collections) => {
+      console.log('---- SELECT selectWithFunction', collections);
+    });
+
+    this._store.select((state) => state.bookCollections).subscribe((collections) => {
+      console.log('---- STORE.select bookCollections', collections);
+    });
+
+    this.selectWithFunction$.subscribe((collections) => {
+      console.log('---- SELECTOR collections', collections);
+    });
+
+    this.selectWithSelector$.subscribe((collections) => {
+      console.log('---- SELECTOR collections', collections);
+    });
+  }
+
+  get bookCollections$(): Observable<Map<string, MediaCollection<Book>>> {
+    return this.selectWithSelector$.pipe(
+      map((bookCollections) => {
+        return this.createBookCollectionsMap(bookCollections);
+      })
+    );
+  }
+
+  private createBookCollectionsMap(collections: MediaCollection<Book>[]): Map<string, MediaCollection<Book>> {
+    const bookCollectionsMap = new Map<string, MediaCollection<Book>>();
+
+    for (const collection of collections) {
+      bookCollectionsMap.set(collection.identifier, collection);
+    }
+
+    return bookCollectionsMap;
   }
 
   get bookCollections(): Map<string, MediaCollection<Book>> {
@@ -22,12 +80,12 @@ export class BookService extends MediaService<Book> {
   reloadBookCollections(): void {
     this.getMediaCollectionIdentifiersList().pipe(
       switchMap(keys => {
-        this._bookCollections.clear(); // clear the current state
+        this._store.dispatch(new LoadBookCollectionAction());
 
         const loadMediaCollections$ = keys.map(key => {
           return this.loadMediaCollection(key).pipe(
             tap((collection) => {
-              this._bookCollections.set(key, collection);
+              this._store.dispatch(new LoadBookCollectionSuccessAction(collection));
             })
           );
         })
@@ -41,7 +99,6 @@ export class BookService extends MediaService<Book> {
     console.log('Creating a new book collection: ', name);
 
     const newBookCollection: MediaCollection<Book> = new MediaCollection<Book>(Book, name);
-    this._bookCollections.set(newBookCollection.identifier, newBookCollection);
 
     this.saveMediaCollection(newBookCollection).subscribe({
       next: () => {
@@ -82,10 +139,13 @@ export class BookService extends MediaService<Book> {
 
     const existingCollection = this._bookCollections.get(collectionIdentifier);
     if (!existingCollection || !book) {
-      throw new Error("The collection couldn't be retrieved or we could not get the book details from the view!");
+      const errorMsg = "The collection couldn't be retrieved or we could not get the book details from the view!"
+      this._store.dispatch(new CreateBookFailureAction({error: errorMsg}));
+      throw new Error(errorMsg);
     }
 
-    existingCollection.addMedia(book);
+    this._store.dispatch(new CreateBookAction(book, collectionIdentifier));
+    //existingCollection.addMedia(book);
 
     this.saveMediaCollection(existingCollection)
       .subscribe({

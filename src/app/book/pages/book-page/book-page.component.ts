@@ -1,5 +1,6 @@
-import {Component, OnInit} from '@angular/core';
+import {Component, OnDestroy, OnInit} from '@angular/core';
 import {FormControl, Validators} from '@angular/forms';
+import {Subscription} from "rxjs";
 import {MediaCollection} from "../../../shared/entities/media-collection.entity";
 import {BookService} from "../../services/book.service";
 import {Book} from "../../entities/book.entity";
@@ -9,18 +10,27 @@ import {Book} from "../../entities/book.entity";
   templateUrl: './book-page.component.html',
   styleUrls: ['./book-page.component.scss']
 })
-export class BookPageComponent implements OnInit {
+export class BookPageComponent implements OnInit, OnDestroy {
 
   public formControl: FormControl;
   public bookCollections: Map<string, MediaCollection<Book>>;
+
+  private bookCollectionsSubs: Subscription;
 
   constructor(private bookService: BookService) {
   }
 
   ngOnInit() {
+    this.bookCollectionsSubs = this.bookService.bookCollections$.subscribe((currentCollections) => {
+      this.bookCollections = currentCollections;
+    });
+
     this.formControl = new FormControl('', Validators.required);
     this.bookService.reloadBookCollections();
-    this.bookCollections = this.bookService.bookCollections;
+  }
+
+  ngOnDestroy() {
+    this.bookCollectionsSubs.unsubscribe();
   }
 
   createBookCollection(): void {

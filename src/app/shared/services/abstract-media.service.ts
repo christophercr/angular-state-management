@@ -8,14 +8,14 @@ import {catchError, map, tap} from "rxjs/operators";
 
 export abstract class MediaService<T extends Media> {
 
-  protected readonly _store: LocalForage;
+  protected readonly _storage: LocalForage;
 
   constructor(private _type: Function) {
     console.log(`Initializing media service for ${_type.name}`);
 
     // each instance of the media service has its own data store: https://github.com/localForage/localForage
     // the initialization options are described here: https://localforage.github.io/localForage/#settings-api-config
-    this._store = localForage.createInstance({
+    this._storage = localForage.createInstance({
       name: 'mediaMan',
       version: 1.0,
       storeName: `media-man-${_type.name}`, // we add the type name to the object store name!
@@ -25,7 +25,7 @@ export abstract class MediaService<T extends Media> {
 
   loadMediaCollection(identifier: string): Observable<MediaCollection<T>> {
     console.log(`Trying to load media collection with the following identifier: ${identifier}`);
-    return from(this._store.getItem(identifier)).pipe(
+    return from(this._storage.getItem(identifier)).pipe(
       map(value => {
         console.log('Found the collection: ', value);
 
@@ -51,7 +51,7 @@ export abstract class MediaService<T extends Media> {
     const serializedVersion = classToPlain(collection, {excludePrefixes: ['_']});
     console.log('Serialized version: ', serializedVersion);
 
-    return from(this._store.setItem(collection.identifier, serializedVersion)).pipe(
+    return from(this._storage.setItem(collection.identifier, serializedVersion)).pipe(
       map(value => {
         console.log(`Saved the ${collection.name} collection successfully! Saved value: `, value);
         return;
@@ -65,7 +65,7 @@ export abstract class MediaService<T extends Media> {
 
   getMediaCollectionIdentifiersList(): Observable<string[]> {
     console.log('Retrieving the list of media collection identifiers');
-    return from(this._store.keys()).pipe(
+    return from(this._storage.keys()).pipe(
       tap(keys => {
         console.log('Retrieved the of media collection identifiers: ', keys);
       }),
@@ -83,7 +83,7 @@ export abstract class MediaService<T extends Media> {
 
     console.log(`Removing media collection with the following identifier ${identifier}`);
 
-    return from(this._store.removeItem(identifier)).pipe(
+    return from(this._storage.removeItem(identifier)).pipe(
       tap(() => {
         console.log(`Removed the ${identifier} collection successfully!`);
       }),

@@ -1,4 +1,5 @@
 import {Component, OnInit} from '@angular/core';
+import {Subscription} from "rxjs";
 import {Genre} from "../../../shared/enums/genre.enum";
 import {MediaCollection} from "../../../shared/entities/media-collection.entity";
 import {BookService} from "../../services/book.service";
@@ -15,13 +16,24 @@ export class BookGenreIndicatorsComponent implements OnInit {
   public genres: Genre[];
   public bookCollections: Map<string, MediaCollection<Book>>;
 
+  private bookCollectionsSubs: Subscription;
+
   constructor(private bookService: BookService) {
     this.bookCollections = this.bookService.bookCollections;
   }
 
   ngOnInit(): void {
-    this.updateGenreCounters();
+    this.bookCollectionsSubs = this.bookService.bookCollections$.subscribe((currentCollections) => {
+      this.bookCollections = currentCollections;
+      this.updateGenreCounters();
+    })
+
+    this.genreCounters = this.getPristineGenresCounterMap();
     this.genres = Array.from(this.genreCounters.keys())
+  }
+
+  ngOnDestroy() {
+    this.bookCollectionsSubs.unsubscribe();
   }
 
   public updateGenreCounters() {
