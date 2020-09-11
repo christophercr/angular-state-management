@@ -2,8 +2,12 @@ import {Injectable} from '@angular/core';
 import {MediaService} from '../../shared/services/abstract-media.service';
 import {Book} from '../entities/book.entity';
 import {MediaCollection} from '../../shared/entities/media-collection.entity';
-import {forkJoin} from "rxjs";
-import {switchMap, tap} from "rxjs/operators";
+import {forkJoin, Observable} from "rxjs";
+import {map, switchMap, tap} from "rxjs/operators";
+import {select, Store} from "@ngrx/store";
+import {selectBookCollections, State} from "../reducers";
+import {loadBookCollection, loadBookCollectionSuccess} from "../actions/load-book-collection.actions";
+import {createBook, createBookFailure} from "../actions/create-book.actions";
 
 @Injectable({
   providedIn: 'root'
@@ -11,23 +15,52 @@ import {switchMap, tap} from "rxjs/operators";
 export class BookService extends MediaService<Book> {
   private _bookCollections: Map<string, MediaCollection<Book>> = new Map<string, MediaCollection<Book>>();
 
-  constructor() {
+  constructor(private _store: Store<State>) {
     super(Book)
+
+    this._store.pipe(
+      select(selectBookCollections),
+    ).subscribe((bookCollectionState) => {
+      this._bookCollections = this.createBookCollectionsMap(bookCollectionState.collections);
+    });
   }
 
-  get bookCollections(): Map<string, MediaCollection<Book>> {
-    return this._bookCollections;
+  get bookCollections$(): Observable<Map<string, MediaCollection<Book>>> {
+    // return this._bookCollections;
+    return this._store.pipe(
+      select(selectBookCollections),
+      map((bookCollectionState) => {
+        return this.createBookCollectionsMap(bookCollectionState.collections);
+      })
+    );
+  }
+
+  private createBookCollectionsMap(collections: MediaCollection<Book>[]): Map<string, MediaCollection<Book>> {
+    const bookCollectionsMap = new Map<string, MediaCollection<Book>>();
+
+    for (const collection of collections) {
+      // we need to re-create the MediaCollection object cause the ObservableStore just works with objects (not classes)
+      // so the instance methods are no longer there!
+      // const rehydratedCollection = new MediaCollection<Book>(Book, collection.name, collection.identifier);
+      // rehydratedCollection.collection = collection.collection;
+
+      bookCollectionsMap.set(collection.identifier, collection);
+    }
+
+    return bookCollectionsMap;
   }
 
   reloadBookCollections(): void {
     this.getMediaCollectionIdentifiersList().pipe(
       switchMap(keys => {
-        this._bookCollections.clear(); // clear the current state
+        // this._bookCollections.clear(); // clear the current state
+        this._store.dispatch(loadBookCollection());
 
         const loadMediaCollections$ = keys.map(key => {
           return this.loadMediaCollection(key).pipe(
             tap((collection) => {
-              this._bookCollections.set(key, collection);
+              // this._bookCollections.set(key, collection);
+              this._store.dispatch(loadBookCollectionSuccess({loadedCollection: collection}));
             })
           );
         })
@@ -41,7 +74,7 @@ export class BookService extends MediaService<Book> {
     console.log('Creating a new book collection: ', name);
 
     const newBookCollection: MediaCollection<Book> = new MediaCollection<Book>(Book, name);
-    this._bookCollections.set(newBookCollection.identifier, newBookCollection);
+    // this._bookCollections.set(newBookCollection.identifier, newBookCollection);
 
     this.saveMediaCollection(newBookCollection).subscribe({
       next: () => {
@@ -82,21 +115,24 @@ export class BookService extends MediaService<Book> {
 
     const existingCollection = this._bookCollections.get(collectionIdentifier);
     if (!existingCollection || !book) {
-      throw new Error("The collection couldn't be retrieved or we could not get the book details from the view!");
+      const errorMsg = "The collection couldn't be retrieved or we could not get the book details from the view!"
+      this._store.dispatch(createBookFailure({error: errorMsg}));
+      throw new Error(errorMsg);
     }
 
-    existingCollection.addMedia(book);
+    this._store.dispatch(createBook({newBook: book, collectionId: collectionIdentifier}));
+    // existingCollection.addMedia(book);
 
-    this.saveMediaCollection(existingCollection)
-      .subscribe({
-        next: () => {
-          console.log(`Book collection called "${existingCollection.name}" updated successfully.`);
-        },
-        error: error => {
-          console.error('Error while updating an existing book collection: ', error);
-          this.displayErrorMessage(`Failed to update the existing book collection called ${existingCollection.name}`);
-        }
-      });
+    // this.saveMediaCollection(existingCollection)
+    //   .subscribe({
+    //     next: () => {
+    //       console.log(`Book collection called "${existingCollection.name}" updated successfully.`);
+    //     },
+    //     error: error => {
+    //       console.error('Error while updating an existing book collection: ', error);
+    //       this.displayErrorMessage(`Failed to update the existing book collection called ${existingCollection.name}`);
+    //     }
+    //   });
   }
 
   removeBook(collectionIdentifier: string, bookIdentifier: string) {
